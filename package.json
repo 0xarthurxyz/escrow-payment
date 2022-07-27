@@ -4,6 +4,7 @@
   "description": "A repo that shows how to make an escrow payment on Celo",
   "main": "index.js",
   "scripts": {
+    "createAccount": "node createAccount.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
