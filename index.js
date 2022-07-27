@@ -3,6 +3,7 @@ const Web3 = require("web3");
 const ContractKit = require("@celo/contractkit");
 const privateKeyToAddress = require("@celo/utils/lib/address").privateKeyToAddress;
 const normalizeAddressWith0x = require("@celo/utils/lib/address").normalizeAddressWith0x;
+const generateKeys = require("@celo/utils/lib/account").generateKeys
 
 // Requirement from Josh's file (not sure why)
 require("dotenv").config();
@@ -13,6 +14,7 @@ let contractkit; // ContractKit instance
 let network; // "mainnet" or "alfajores" (from .env file)
 let networkURL; // Forno URL
 let account; // your account (public address and private key) for testing purposes
+let escrowAmount; // amount of CELO to be sent from Alice to Bob (only CELO in this example, but any ERC20 token works)
 
 // sets up web3, contractkit, add private key to contractkit
 async function init() {
@@ -49,3 +51,34 @@ async function init() {
     console.log('cUSD balance', balance.cUSD.toFixed());
 }
 
+
+
+/* 
+Option 2: Private key-based proof of identity
+*/
+// Alice makes escrow payment to Bob
+
+const generatedKeys = await generateKeys()
+
+// Bob creates a Celo account
+
+
+// Bob withdraws escrow payment from Alice
+
+
+
+
+
+// helper function to run/disable certain components when testing
+async function main() {
+    // asks user for inputs
+    network = await ask("What network do you want to query? (alfajores/mainnet)");
+    escrowAmount = await ask(
+      "How many CELO would you like to send Bob with the escrow payment?"
+    );
+    await init();
+
+  }
+  
+  main();
+  
