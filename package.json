@@ -1,0 +1,19 @@
+{
+  "name": "escrow-payment",
+  "version": "1.0.0",
+  "description": "A repo that shows how to make an escrow payment on Celo",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xarthurxyz/escrow-payment.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/0xarthurxyz/escrow-payment/issues"
+  },
+  "homepage": "https://github.com/0xarthurxyz/escrow-payment#readme"
+}
