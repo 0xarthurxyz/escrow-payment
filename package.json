@@ -16,5 +16,10 @@
   "bugs": {
     "url": "https://github.com/0xarthurxyz/escrow-payment/issues"
   },
-  "homepage": "https://github.com/0xarthurxyz/escrow-payment#readme"
+  "homepage": "https://github.com/0xarthurxyz/escrow-payment#readme",
+  "dependencies": {
+    "@celo/contractkit": "^2.0.0",
+    "dotenv": "^16.0.1",
+    "web3": "^1.7.4"
+  }
 }
