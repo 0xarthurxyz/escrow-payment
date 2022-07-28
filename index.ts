@@ -53,6 +53,13 @@ async function init() {
   // checks account is connected as expected
   console.log("contractkit account:", kit.defaultAccount);
   console.log("public address:", account);
+
+  // checks connection by querying CELO and cUSD balances
+   
+  const balance : any = await kit.celoTokens.balancesOf(account); // print your account balance on the relevant network (to check if connection is established as expected)
+  console.log('Celo balance:', balance.CELO.toFixed());
+  console.log('cUSD balance:', balance.cUSD.toFixed());
+   
 }
 
 /* 
@@ -74,9 +81,11 @@ async function createTemporaryKeys() {
 // Alice escrows the payment
 async function makeEscrowPayment(escrowAmount: number) {
   const escrow = await kit.contracts.getEscrow();
-  console.log('escrow instance:', escrow);
+//   console.log('escrow instance:', escrow);
   const escrowToken = await kit.contracts.getGoldToken(); 
-  console.log('escrowToken:', escrowToken);
+//   console.log('escrowToken:', escrowToken);
+
+  // MAKE SURE YOUR ACCOUNT HAS CELO
 
 //   await escrow.transfer(
 //     identifier, // 0x00000000
