@@ -85,9 +85,13 @@ async function makeEscrowPayment(escrowAmount: number) {
   const escrowToken = await kit.contracts.getGoldToken(); 
 //   console.log('escrowToken:', escrowToken);
 
-  // MAKE SURE YOUR ACCOUNT HAS CELO
+identifier = '0x0000000000000000000000000000000000000000000000000000000000000000'
+const contractDecimalEscrowAmount = kit.web3.utils.toWei(escrowAmount.toString());
+console.log('contractDecimalEscrowAmount', contractDecimalEscrowAmount);
+// const contractDecimalEscrowAmount = (await convertToContractDecimals(escrowAmount, escrowToken)).toString()
 
-  // compute identifier
+// INVARIANT: YOUR ACCOUNT NEEDS CELO
+
 
 //   const identifier = kit.connection.web3.utils.soliditySha3({
 //     type: 'string',
@@ -96,14 +100,14 @@ async function makeEscrowPayment(escrowAmount: number) {
 //   console.log(identifier) // doesn't work yet
   
 
-//   await escrow.transfer(
-//     identifier, // 0x0000000000000000000000000000000000000000000000000000000000000000
-//     escrowToken.address, // Celo-only in this example
-//     escrowAmount,
-//     0, // expirySeconds
-//     paymentId,
-//     0 // minimum attestations
-//   );
+  await escrow.transfer(
+    identifier,
+    escrowToken.address, // Celo-only in this example
+    escrowAmount,
+    0, // expirySeconds
+    paymentId,
+    0 // minimum attestations
+  );
 }
 
 // Bob creates a Celo account
@@ -123,7 +127,7 @@ async function main() {
 
   await init();
   await createTemporaryKeys();
-  await makeEscrowPayment(0.1);
+  await makeEscrowPayment(0.2);
 }
 
 main();
