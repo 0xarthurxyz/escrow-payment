@@ -21,6 +21,7 @@ import {
     privateKeyToAddress
 } from "@celo/utils/lib/address";
 import { 
+    generateMnemonic,
     generateKeys
 } from "@celo/cryptographic-utils";
 // import {  } from ;
@@ -60,37 +61,38 @@ async function init() {
     }
     kit.addAccount(process.env.PRIVATE_KEY);
    
-   // checks account is connected as expected
-   console.log('contractkit account', kit.defaultAccount);
-   
-   // sets up your account
-   account = normalizeAddressWith0x(
-       privateKeyToAddress(process.env.PRIVATE_KEY)
-   );
+    // sets up your account
+    account = normalizeAddressWith0x(
+        privateKeyToAddress(process.env.PRIVATE_KEY)
+    );
 
-    // check 
+    // checks account is connected as expected
+    console.log('contractkit account:', kit.defaultAccount);
+    console.log('public address:', account);
+        
+    // checks connection by querying CELO and cUSD balances
+    /*  
     const balance : any = await kit.celoTokens.balancesOf(account); // print your account balance on the relevant network (to check if connection is established as expected)
-    console.log('Celo balance', balance.CELO.toFixed());
-    console.log('cUSD balance', balance.cUSD.toFixed());
+    console.log('Celo balance:', balance.CELO.toFixed());
+    console.log('cUSD balance:', balance.cUSD.toFixed());
+    */
 }
+// Alice makes escrow payment to Bob
 
 /* 
 Option 2: Private key-based proof of identity
 */
-// Alice makes escrow payment to Bob
 async function createPaymentId() {    
-    const generatedKeys = await generateKeys(
-        await generateMnemonic()
-    );
-    // const publicKey = generatedKeys.publicKey
-    // const privateKey = generatedKeys.privateKey;
-    // const paymentId = publicKeyToAddress(publicKey);
-
-    // console.log("publicKey:", publicKey);
-    // console.log("privateKey:", privateKey);
-    // console.log("paymentId:", paymentId);
+    
+    const mnemonic = await generateMnemonic();
+    console.log('mnemonic: ', mnemonic); // print for debugging
+    
+    const generatedKeys = await generateKeys(mnemonic);
+    console.log('generatedKeys', generatedKeys); // print for debugging
+    const publicKey = generatedKeys.publicKey
+    const privateKey = generatedKeys.privateKey;
+    const paymentId = publicKeyToAddress(publicKey);
 }
-
 
 
 // Bob creates a Celo account
@@ -106,14 +108,14 @@ async function main() {
     
     /* 
     escrowAmount = await ask(
-      "How many CELO would you like to send Bob with the escrow payment?"
-    ); 
-    */
-
-    await init();
-    // await createPaymentId();
-
-  }
+        "How many CELO would you like to send Bob with the escrow payment?"
+        ); 
+        */
+       
+       await init();
+       await createPaymentId();
+       
+    }
   
   main();
   
