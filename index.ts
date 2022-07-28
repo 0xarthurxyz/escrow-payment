@@ -87,8 +87,17 @@ async function makeEscrowPayment(escrowAmount: number) {
 
   // MAKE SURE YOUR ACCOUNT HAS CELO
 
+  // compute identifier
+
+//   const identifier = kit.connection.web3.utils.soliditySha3({
+//     type: 'string',
+//     value: phoneNumber,
+//   })
+//   console.log(identifier) // doesn't work yet
+  
+
 //   await escrow.transfer(
-//     identifier, // 0x00000000
+//     identifier, // 0x0000000000000000000000000000000000000000000000000000000000000000
 //     escrowToken.address, // Celo-only in this example
 //     escrowAmount,
 //     0, // expirySeconds
@@ -114,7 +123,7 @@ async function main() {
 
   await init();
   await createTemporaryKeys();
-  await makeEscrowPayment(5);
+  await makeEscrowPayment(0.1);
 }
 
 main();
