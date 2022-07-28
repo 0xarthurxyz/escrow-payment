@@ -1,38 +1,21 @@
-/* 
-// Standard Celo package requirements
-const Web3 = require("web3"); // used to create private keys
-const ContractKit = require("@celo/contractkit"); // used to interact with Celo smart contracts
-
-// Requirements to generate variables for escrow payments
-const CELO_DERIVATION_PATH_BASE = require("@celo/base/lib/account").CELO_DERIVATION_PATH_BASE; // used to generate private keys
-const generateKeys = require("@celo/utils/lib/account").generateKeys
-const publicKeyToAddress = require("@celo/utils/lib/address").publicKeyToAddress; // used to generate public address
-const normalizeAddressWith0x = require("@celo/utils/lib/address").normalizeAddressWith0x;
-*/
-
-import { ContractKit, newKit } from "@celo/contractkit";
-// import {
-//     CELO_DERIVATION_PATH_BASE,
-//     ensureLeading0x
-// } from "@celo/base";
+import { 
+    ContractKit, 
+    newKit 
+} from "@celo/contractkit";
 import {
   publicKeyToAddress,
   normalizeAddressWith0x,
   privateKeyToAddress,
 } from "@celo/utils/lib/address";
 import { generateMnemonic, generateKeys } from "@celo/cryptographic-utils";
-// import {  } from ;
-
-// Escrow smart contract requirements
-
-// Requirement from Josh's file (not sure why)
-require("dotenv").config();
+require("dotenv").config(); // to use .env file
 
 // sets up main variables (for later use)
 let kit : ContractKit; // ContractKit instance
 let network = "alfajores"; // "mainnet" or "alfajores" (from .env file)
 let networkURL: any; // Forno URL
 let account: any; // your account (public address and private key) for testing purposes
+let identifier: string; // obfuscated representation of user's identity (e.g. phone number)
 let paymentId: string;
 let secret: string;
 let escrowToken: any; // token to be sent from Alice to Bon (only CELO in this example, but any ERC20 token works)
@@ -70,14 +53,6 @@ async function init() {
   // checks account is connected as expected
   console.log("contractkit account:", kit.defaultAccount);
   console.log("public address:", account);
-
-  // checks connection by querying CELO and cUSD balances
-  /*  
-    const balance : any = await kit.celoTokens.balancesOf(account); // print your account balance on the relevant network (to check if connection is established as expected)
-    console.log('Celo balance:', balance.CELO.toFixed());
-    console.log('cUSD balance:', balance.cUSD.toFixed());
-    */
-
 }
 
 /* 
@@ -104,7 +79,7 @@ async function makeEscrowPayment(escrowAmount: number) {
   console.log('escrowToken:', escrowToken);
 
 //   await escrow.transfer(
-//     phoneHash, // 0x00000000
+//     identifier, // 0x00000000
 //     escrowToken.address, // Celo-only in this example
 //     escrowAmount,
 //     0, // expirySeconds
@@ -126,7 +101,7 @@ async function main() {
     escrowAmount = await ask(
         "How many CELO would you like to send Bob with the escrow payment?"
         ); 
-        */
+  */
 
   await init();
   await createTemporaryKeys();
