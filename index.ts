@@ -86,8 +86,8 @@ async function makeEscrowPayment(escrowAmount: number) {
 //   console.log('escrowToken:', escrowToken);
 
 identifier = '0x0000000000000000000000000000000000000000000000000000000000000000'
-const contractDecimalEscrowAmount = kit.web3.utils.toWei(escrowAmount.toString());
-console.log('contractDecimalEscrowAmount', contractDecimalEscrowAmount);
+// const contractDecimalEscrowAmount = kit.web3.utils.toWei(escrowAmount.toString());
+// console.log('contractDecimalEscrowAmount', contractDecimalEscrowAmount);
 // const contractDecimalEscrowAmount = (await convertToContractDecimals(escrowAmount, escrowToken)).toString()
 
 // INVARIANT: YOUR ACCOUNT NEEDS CELO
@@ -100,15 +100,19 @@ console.log('contractDecimalEscrowAmount', contractDecimalEscrowAmount);
 //   console.log(identifier) // doesn't work yet
   
 
-  await escrow.transfer(
-    identifier,
-    escrowToken.address, // Celo-only in this example
-    escrowAmount,
-    0, // expirySeconds
-    paymentId,
-    0 // minimum attestations
-  );
+//   await escrow.transfer(
+//     identifier,
+//     escrowToken.address, // Celo-only in this example
+//     escrowAmount,
+//     0, // expirySeconds
+//     paymentId,
+//     0 // minimum attestations
+//   );
+
+  const id = await escrow.getSentPaymentIds('account');
+  console.log('id', id)
 }
+
 
 // Bob creates a Celo account
 
