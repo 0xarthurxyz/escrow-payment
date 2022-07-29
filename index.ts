@@ -336,10 +336,11 @@ async function bobWithdrawsEscrowPayment() {
 OPTION: ATTESTATION-BASED ESCROW FLOW
 */
 
+// From: https://github.com/critesjosh/register-number/blob/1638bc817a1e8ad1f59edefff81364080a5ff3ef/index.js#L244-L283
 async function aliceCreatesKeysWithIdentifier() {
-  const authSigner = {
+  const authSigner : OdisUtils.Query.WalletKeySigner = {
     authenticationMethod: OdisUtils.Query.AuthenticationMethod.WALLET_KEY,
-    aliceKit,
+    contractKit: aliceKit
   };
 
   switch (network) {
