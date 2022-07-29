@@ -29,12 +29,14 @@ let bobPrivateKey: string;
 let bobKit: ContractKit; // Bob's ContractKit instance
 
 // Variables for Escrow payment
-let escrowContract: any; // Instance of the Escrow.sol contract wrapper
+let escrowContract: any; // instance of the Escrow.sol contract wrapper
 let identifier: string; // obfuscated representation of user's identity (e.g. phone number)
 let paymentId: string;
 let secret: string;
-let escrowToken: any; // token to be sent from Alice to Bon (cUSD in this example, but any ERC20 token works)
+let escrowTokenName: string; // token name to be sent from Alice to Bon
+let escrowToken: any; // ERC20 token wrapper
 let escrowAmount: number; // amount of tokens to be sent from Alice to Bob
+let expirySecondsBeforeRevocation: number; // minimum number of seconds before Alice can revoke the escrow payment
 
 // Variables for third party gas station
 let gasKit: ContractKit;
@@ -49,7 +51,19 @@ if (!process.env.GAS_STATION_PRIVATE_KEY) {
 }
 let gasPrivateKey: string = process.env.GAS_STATION_PRIVATE_KEY;
 
-// sets up web3, contractkit, add private key to contractkit
+// Variables for attestations
+let attestationsContract: any; // instance of the Attestations.sol contract wrapper
+if (!process.env.PHONE_NUMBER) {
+  throw new Error("Environment variable: PHONE_NUMBER is missing");
+}
+let plainTextPhoneNumber: string = process.env.PHONE_NUMBER;
+let odisPepper: string;
+let minimumNumberOfAttestations: number;
+
+/* 
+START
+*/
+
 async function init() {
   // sets network URL
   switch (network) {
@@ -89,10 +103,17 @@ async function init() {
 
   // creates EscrowWrapper instance
   escrowContract = await aliceKit.contracts.getEscrow();
+
+  // creates Attestation
+  attestationsContract = await aliceKit.contracts.getAttestations();
 }
 
+/* 
+OPTION: SECRET-BASED ESCROW FLOW
+*/
+
 // Alice generates inputs necessary to make escrow payment
-async function aliceCreatesTemporaryKeys() {
+async function aliceCreatesRandomTemporaryKeys() {
   const mnemonic = await generateMnemonic();
   console.log(
     `The mnemonic used to generate temporary keys for the escrow payment is:  \n"${mnemonic}"\n`
@@ -108,30 +129,52 @@ async function aliceCreatesTemporaryKeys() {
 }
 
 // Alice escrows the payment
-async function aliceMakesEscrowPayment(escrowAmount: number) {
-  escrowToken = await aliceKit.contracts.getStableToken();
+async function aliceMakesEscrowPayment(
+  escrowAmount: number,
+  escrowTokenName: any,
+  identifier: string,
+  paymentId: string,
+  expirySecondsBeforeRevocation: number,
+  minimumNumberOfAttestations: number
+) {
+  // gets token wrapper
+  switch (escrowTokenName) {
+    case "cUSD":
+      escrowToken = await aliceKit.contracts.getStableToken();
+      break;
+    case "CELO":
+      escrowToken = await aliceKit.contracts.getGoldToken();
+      break;
+    default: // default cUSD
+      escrowToken = await aliceKit.contracts.getStableToken();
+      break;
+  }
 
-  // Convert amount into wei: https://web3js.readthedocs.io/en/v1.2.11/web3-utils.html?highlight=towei#towei
+  // converts escrow amount into wei: https://web3js.readthedocs.io/en/v1.2.11/web3-utils.html?highlight=towei#towei
   const contractDecimalEscrowAmount = aliceKit.web3.utils.toWei(
     escrowAmount.toString()
   );
-  //   console.log("contractDecimalEscrowAmount:", contractDecimalEscrowAmount);
-  identifier =
-    "0x0000000000000000000000000000000000000000000000000000000000000000";
 
+  // approves escrow transfer
   await escrowToken
     .approve(escrowContract.address, contractDecimalEscrowAmount)
     .sendAndWaitForReceipt();
 
-  // INVARIANT: ALICE'S ACCOUNT HAS A cUSD BALANCE
+  /*   
+  INVARIANT: ALICE'S ACCOUNT HAS A cUSD BALANCE 
+  */
+
+  // makes escrow payment
   const escrowTransfer = await escrowContract.transfer(
     identifier,
     escrowToken.address,
     contractDecimalEscrowAmount,
-    1,
+    expirySecondsBeforeRevocation,
     paymentId,
     0
   );
+
+  // confirms escrow payment
   const transferReceipt = await escrowTransfer.sendAndWaitForReceipt();
   console.log(
     `Alice's payment into escrow was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${transferReceipt.transactionHash} \n`
@@ -189,13 +232,13 @@ async function gasStationFundsBobAccount() {
     gasPublicAddress
   );
   console.log(
-    `Gas station: 
-    \n-Public address = ${gasPublicAddress} 
-    \n-Private Key: ${gasPrivateKey}
-    \n-Gas station's CELO balance is: ${gasKit.web3.utils.fromWei(
+    `Gas station details: 
+    -Public address = ${gasPublicAddress} 
+    -Private Key: ${gasPrivateKey}
+    -Gas station's CELO balance is: ${gasKit.web3.utils.fromWei(
       gasStationBalance.CELO.toFixed()
     )}
-    \n-Gas station's cUSD balance is: ${gasKit.web3.utils.fromWei(
+    -Gas station's cUSD balance is: ${gasKit.web3.utils.fromWei(
       gasStationBalance.cUSD.toFixed()
     )}\n`
   );
@@ -233,13 +276,13 @@ async function gasStationFundsBobAccount() {
 
   const bobBalance: any = await bobKit.celoTokens.balancesOf(bobPublicAddress);
   console.log(
-    `Bob has an account: 
-    \n-Public address = ${bobPublicAddress} 
-    \n-Private Key: ${bobPrivateKey}
-    \n-Bob's CELO balance is: ${bobKit.web3.utils.fromWei(
+    `Bob's newly created account details: 
+    -Public address = ${bobPublicAddress} 
+    -Private Key: ${bobPrivateKey}
+    -Bob's CELO balance is: ${bobKit.web3.utils.fromWei(
       bobBalance.CELO.toFixed()
     )}
-    \n-Bob's cUSD balance is: ${bobKit.web3.utils.fromWei(
+    -Bob's cUSD balance is: ${bobKit.web3.utils.fromWei(
       bobBalance.cUSD.toFixed()
     )}\n`
   );
@@ -249,7 +292,6 @@ async function gasStationFundsBobAccount() {
 async function bobWithdrawsEscrowPayment() {
   // Temporary: Create new kit instance to sign with `secret`
   // TODO Arthur: find out how to add multiple accounts to kit instance
-  // kit.addAccount(secret)
   const secretKit = await newKit(networkURL);
   if (typeof secretKit == "undefined") {
     throw new Error("variable secretKit undefined");
@@ -257,7 +299,7 @@ async function bobWithdrawsEscrowPayment() {
   secretKit.addAccount(secret);
   secretKit.defaultAccount = paymentId;
 
-  // Get { v, r, s } arguments for withdraw()
+  // Get { v, r, s } arguments
   // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L228-L231
   const msgHash = secretKit.connection.web3.utils.soliditySha3({
     type: "address",
@@ -288,16 +330,26 @@ async function bobWithdrawsEscrowPayment() {
   );
 }
 
+/* 
+OPTION: ATTESTATION-BASED ESCROW FLOW
+*/
+
+async function aliceCreatesKeysWithIdentifier() {}
+
+/* 
+HELPER FUNCTIONS
+*/
+
 // CLI input helper function
 // source: https://github.com/critesjosh/register-number/blob/1638bc817a1e8ad1f59edefff81364080a5ff3ef/index.js#L22-L34
-function ask(query) {
+function ask(query: string) {
   const readline = require("readline").createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
   return new Promise((resolve) =>
-    readline.question(query, (ans) => {
+    readline.question(query, (ans: unknown) => {
       readline.close();
       resolve(ans);
     })
@@ -306,29 +358,68 @@ function ask(query) {
 
 // helper function to run/disable certain components when testing
 async function main() {
-  // asks user for inputs
-  // network = await ask("What network do you want to query? (alfajores/mainnet)");
+  /* UNCOMMENT
+    // asks user to choose between two escrow flows
+    let escrowOptionToVerifyProofOfIdentity: any = await ask(
+      "What escrow option would you like to test? (secret-based/attestation-based)"
+    );
+  */
 
-  let escrowOptionToVerifyProofOfIdentity: any = await ask(
-    "What escrow option would you like to test? (secret-based/attestation-based)"
-  );
+  // Setting
+  let escrowOptionToVerifyProofOfIdentity = "secret-based"; // can be 'secret-based' or 'attestation-based'
 
+  // executes escrow flow chosen above
   switch (escrowOptionToVerifyProofOfIdentity) {
     case "secret-based":
       await init();
-      await aliceCreatesTemporaryKeys();
-      await aliceMakesEscrowPayment(0.1);
-      // await aliceRevokeEscrowPayment();
-      //   await aliceMakesEscrowPayment(0.2);
+      
+      // escrow payment settings
+      escrowAmount = 0.1;
+      escrowTokenName = "cUSD"; // default: 'cUSD' (can be 'CELO' in this example)
+      identifier =
+      "0x0000000000000000000000000000000000000000000000000000000000000000"; // default (cannot be changed in this escrow flow)
+      expirySecondsBeforeRevocation = 1;
+      minimumNumberOfAttestations = 0; // default (cannot be changed in this escrow flow)
+      
+      // test escrow payment
+      await aliceCreatesRandomTemporaryKeys();
+      await aliceMakesEscrowPayment(
+        escrowAmount,
+        escrowTokenName,
+        identifier,
+        paymentId,
+        expirySecondsBeforeRevocation,
+        minimumNumberOfAttestations
+      );
+
+      // test escrow revocation
+      await aliceRevokeEscrowPayment();
+
+      // escrow payment settings
+      escrowAmount = 0.1;
+
+      // test escrow payment
+      await aliceMakesEscrowPayment(
+        escrowAmount,
+        escrowTokenName,
+        identifier,
+        paymentId,
+        expirySecondsBeforeRevocation,
+        minimumNumberOfAttestations
+      );
+
+      // test withdrawal
       await bobCreatesAccount();
       await gasStationFundsBobAccount();
       await bobWithdrawsEscrowPayment();
       break;
+
     case "attestation-based":
       await init();
-      
+
       break;
   }
 }
 
+// main function called execution
 main();
