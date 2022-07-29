@@ -18,7 +18,7 @@ let account: any; // your account (public address and private key) for testing p
 let identifier: string; // obfuscated representation of user's identity (e.g. phone number)
 let paymentId: string;
 let secret: string;
-let escrowToken: any; // token to be sent from Alice to Bon (only CELO in this example, but any ERC20 token works)
+let escrowToken: any; // token to be sent from Alice to Bon (cUSD in this example, but any ERC20 token works)
 let escrowAmount: number; // amount of tokens to be sent from Alice to Bob
 
 // sets up web3, contractkit, add private key to contractkit
@@ -49,6 +49,7 @@ async function init() {
   account = normalizeAddressWith0x(
     privateKeyToAddress(process.env.PRIVATE_KEY)
   );
+  kit.defaultAccount = account
 
   // checks account is connected as expected
   console.log("contractkit account:", kit.defaultAccount);
@@ -74,24 +75,25 @@ async function createTemporaryKeys() {
   const temporaryKeys = await generateKeys(mnemonic);
   console.log("generatedKeys", temporaryKeys); // print for debugging
   const publicKey = temporaryKeys.publicKey;
-  const paymentId = publicKeyToAddress(publicKey);
-  const secret = temporaryKeys.privateKey;
+  paymentId = publicKeyToAddress(publicKey);
+  secret = temporaryKeys.privateKey;
 }
 
 // Alice escrows the payment
 async function makeEscrowPayment(escrowAmount: number) {
   const escrow = await kit.contracts.getEscrow();
-//   console.log('escrow instance:', escrow);
-  const escrowToken = await kit.contracts.getGoldToken(); 
-//   console.log('escrowToken:', escrowToken);
+  escrowToken = await kit.contracts.getStableToken(); 
 
-identifier = '0x0000000000000000000000000000000000000000000000000000000000000000'
-// const contractDecimalEscrowAmount = kit.web3.utils.toWei(escrowAmount.toString());
-// console.log('contractDecimalEscrowAmount', contractDecimalEscrowAmount);
-// const contractDecimalEscrowAmount = (await convertToContractDecimals(escrowAmount, escrowToken)).toString()
+  // Convert amount into wei: https://web3js.readthedocs.io/en/v1.2.11/web3-utils.html?highlight=towei#towei
+  const contractDecimalEscrowAmount = kit.web3.utils.toWei(escrowAmount.toString());
+  console.log('contractDecimalEscrowAmount:', contractDecimalEscrowAmount);
+  identifier = '0x0000000000000000000000000000000000000000000000000000000000000000'
+  console.log('escrowToken.address:', escrowToken.address);
+  console.log('paymentId:', paymentId);
 
-// INVARIANT: YOUR ACCOUNT NEEDS CELO
+  await escrowToken.approve(escrow.address, contractDecimalEscrowAmount).sendAndWaitForReceipt();
 
+// INVARIANT: YOUR ACCOUNT HAS cUSD
 
 //   const identifier = kit.connection.web3.utils.soliditySha3({
 //     type: 'string',
@@ -100,16 +102,19 @@ identifier = '0x0000000000000000000000000000000000000000000000000000000000000000
 //   console.log(identifier) // doesn't work yet
   
 
-//   await escrow.transfer(
-//     identifier,
-//     escrowToken.address, // Celo-only in this example
-//     escrowAmount,
-//     0, // expirySeconds
-//     paymentId,
-//     0 // minimum attestations
-//   );
+  const escrowTransfer = await escrow.transfer(
+    identifier,
+    escrowToken.address,
+    contractDecimalEscrowAmount,
+    1,
+    paymentId,
+    0
+  );
+  let receipt = await escrowTransfer.sendAndWaitForReceipt();
 
-  const id = await escrow.getSentPaymentIds('account');
+  console.log('Escrow transfer was successful', receipt);
+
+  const id = await escrow.getSentPaymentIds(account);
   console.log('id', id)
 }
 
