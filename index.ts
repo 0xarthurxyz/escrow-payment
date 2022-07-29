@@ -3,9 +3,14 @@ import {
   publicKeyToAddress,
   normalizeAddressWith0x,
   privateKeyToAddress,
+  ensureLeading0x,
 } from "@celo/utils/lib/address";
 import { SignatureUtils } from "@celo/utils/lib/signatureUtils";
-import { generateMnemonic, generateKeys } from "@celo/cryptographic-utils";
+import {
+  generateMnemonic,
+  generateKeys,
+  deriveDek,
+} from "@celo/cryptographic-utils";
 import { OdisUtils } from "@celo/identity";
 import { WalletKeySigner } from "@celo/identity/lib/odis/query";
 import { createInterface } from "readline";
@@ -343,41 +348,46 @@ OPTION: ATTESTATION-BASED ESCROW FLOW
 // From: https://github.com/critesjosh/register-number/blob/1638bc817a1e8ad1f59edefff81364080a5ff3ef/index.js#L244-L283
 async function aliceCreatesKeysWithIdentifier() {
   // generate data encryption key (DEK)
-  const dekMnemonic = await generateMnemonic();
-  const dataEncryptionKeys = await generateKeys(dekMnemonic);
+  const mnemonic = await generateMnemonic();
+  const dataEncryptionKeys = await deriveDek(mnemonic);
   const dekPublicKey = dataEncryptionKeys.publicKey;
-  const dekPublicAddress = publicKeyToAddress(dekPublicKey);
-  const dataEncryptionKey = dataEncryptionKeys.privateKey;
+  const dekPublicAddress = dataEncryptionKeys.address;
+  const dekPrivateKey = dataEncryptionKeys.privateKey;
 
-  // set up DEK
+  // // set up DEK
   const dekKit = await newKit(networkURL);
   if (typeof dekKit == "undefined") {
     throw new Error("variable aliceKit undefined");
   }
-  dekKit.addAccount(dataEncryptionKey);
-  
+  dekKit.addAccount(dekPrivateKey);
+
   // register data encryption key (DEK) on-chain
   // from: https://github.com/celo-org/docs/blob/647dea55c7c0b3bb25106a4e8cebed22c54e97b7/docs/developer-resources/contractkit/data-encryption-key.md#L13
-  accountsContract = await dekKit.contracts.getAccounts();
+  accountsContract = await aliceKit.contracts.getAccounts();
 
-  const setDEK = await accountsContract.setAccountDataEncryptionKey(
-    dekPublicAddress
-  );
-  const setDEKReceipt = await setDEK.sendAndWaitForReceipt();
-  const dekPublicKeyCheck = await accountsContract.getDataEncryptionKey(
-    dekPublicKey
-  );
-  console.log(
-    `Alice's data encryption key registration was successful!
-    - DEK = ${dataEncryptionKey}
-    See transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${setDEKReceipt} \n`
-  );
+  const setDEK = await accountsContract
+    .setAccountDataEncryptionKey(ensureLeading0x(dekPublicKey))
+    .sendAndWaitForReceipt();
+
+  // const setDEKReceipt = await setDEK.sendAndWaitForReceipt();
+  // const dataEncryptionKey = await accountsContract.getDataEncryptionKey(
+  //   dekPublicKey
+  // );
+  // console.log(
+  //   `Alice's data encryption key registration was successful!
+  //   - DEK = ${dekPrivateKey}
+  //   See transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${setDEKReceipt} \n`
+  // );
+
+  console.log("here");
 
   // set up environment for odis query
   const authSigner: WalletKeySigner = {
     authenticationMethod: OdisUtils.Query.AuthenticationMethod.WALLET_KEY,
-    contractKit: dekKit,
+    contractKit: aliceKit,
   };
+
+  console.log("here");
 
   switch (network) {
     case "alfajores":
@@ -402,14 +412,22 @@ async function aliceCreatesKeysWithIdentifier() {
     odisPubKey: odisPublicKey,
   };
 
+  console.log("here");
+  /* 
+  WORKS UP TO HERE
+  */
+
   // query odis for phone number pepper
   const odisResponse =
     await OdisUtils.PhoneNumberIdentifier.getPhoneNumberIdentifier(
       plainTextPhoneNumber,
-      dekPublicAddress,
+      alicePublicAddress,
       authSigner,
       serviceContext
     );
+    
+  console.log("here");
+
   odisPepper = odisResponse.pepper;
   phoneNumberHash = odisResponse.phoneHash;
 
