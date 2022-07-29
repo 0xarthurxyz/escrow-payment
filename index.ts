@@ -6,6 +6,7 @@ import {
 } from "@celo/utils/lib/address";
 import { SignatureUtils } from "@celo/utils/lib/signatureUtils";
 import { generateMnemonic, generateKeys } from "@celo/cryptographic-utils";
+import { createInterface } from "readline";
 require("dotenv").config(); // to use .env file
 
 // Variables for general use
@@ -287,25 +288,47 @@ async function bobWithdrawsEscrowPayment() {
   );
 }
 
+// CLI input helper function
+// source: https://github.com/critesjosh/register-number/blob/1638bc817a1e8ad1f59edefff81364080a5ff3ef/index.js#L22-L34
+function ask(query) {
+  const readline = require("readline").createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) =>
+    readline.question(query, (ans) => {
+      readline.close();
+      resolve(ans);
+    })
+  );
+}
+
 // helper function to run/disable certain components when testing
 async function main() {
   // asks user for inputs
   // network = await ask("What network do you want to query? (alfajores/mainnet)");
 
-  /* 
-    escrowAmount = await ask(
-        "How many CELO would you like to send Bob with the escrow payment?"
-        ); 
-  */
+  let escrowOptionToVerifyProofOfIdentity: any = await ask(
+    "What escrow option would you like to test? (secret-based/attestation-based)"
+  );
 
-  await init();
-  await aliceCreatesTemporaryKeys();
-  await aliceMakesEscrowPayment(0.1);
-    // await aliceRevokeEscrowPayment();
-  //   await aliceMakesEscrowPayment(0.2);
-  await bobCreatesAccount();
-  await gasStationFundsBobAccount();
-  await bobWithdrawsEscrowPayment();
+  switch (escrowOptionToVerifyProofOfIdentity) {
+    case "secret-based":
+      await init();
+      await aliceCreatesTemporaryKeys();
+      await aliceMakesEscrowPayment(0.1);
+      // await aliceRevokeEscrowPayment();
+      //   await aliceMakesEscrowPayment(0.2);
+      await bobCreatesAccount();
+      await gasStationFundsBobAccount();
+      await bobWithdrawsEscrowPayment();
+      break;
+    case "attestation-based":
+      await init();
+      
+      break;
+  }
 }
 
 main();
