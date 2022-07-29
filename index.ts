@@ -9,7 +9,6 @@ import { generateMnemonic, generateKeys } from "@celo/cryptographic-utils";
 require("dotenv").config(); // to use .env file
 
 // Variables for general use
-let kit: ContractKit; // ContractKit instance
 let network = "alfajores"; // "mainnet" or "alfajores" (from .env file)
 let networkURL: any; // Forno URL
 
@@ -17,14 +16,16 @@ let networkURL: any; // Forno URL
 let alicePublicAddress: string;
 let alicePublicKey: string;
 if (!process.env.ALICE_PRIVATE_KEY) {
-  throw new Error("Environment variable: ALICE_PRIVATE_KEY is missing");
+    throw new Error("Environment variable: ALICE_PRIVATE_KEY is missing");
 }
 let alicePrivateKey: string = process.env.ALICE_PRIVATE_KEY;
+let aliceKit: ContractKit; // Alice's ContractKit instance
 
 // Variables for Bob (recipient)
 let bobPublicAddress: string;
 let bobPublicKey: string;
 let bobPrivateKey: string;
+let bobKit: ContractKit; // Bob's ContractKit instance
 
 // Variables for Escrow payment
 let escrowContract: any; // Instance of the Escrow.sol contract wrapper
@@ -48,32 +49,32 @@ async function init() {
       console.log("Set NETWORK to either alfajores or mainnet");
   }
 
-  // creates ContractKit instance
-  kit = await newKit(networkURL);
-  if (typeof kit == "undefined") {
-    throw new Error("variable kit undefined");
+  // creates ContractKit instance for Alice
+  aliceKit = await newKit(networkURL);
+  if (typeof aliceKit == "undefined") {
+    throw new Error("variable aliceKit undefined");
   }
-  kit.addAccount(alicePrivateKey);
+  aliceKit.addAccount(alicePrivateKey);
 
   // sets up your account
   alicePublicAddress = normalizeAddressWith0x(
     privateKeyToAddress(alicePrivateKey)
   );
-  kit.defaultAccount = alicePublicAddress;
+  aliceKit.defaultAccount = alicePublicAddress;
 
   // checks account is connected as expected
   console.log(`Alice's public address is: ${alicePublicAddress} \n`);
   // prints Alice's account balance on the relevant network (to check if connection is established as expected)
-  const balance: any = await kit.celoTokens.balancesOf(alicePublicAddress);
+  const balance: any = await aliceKit.celoTokens.balancesOf(alicePublicAddress);
   console.log(
-    `Alice's cUSD balance is: ${kit.web3.utils.fromWei(
+    `Alice's cUSD balance is: ${aliceKit.web3.utils.fromWei(
       balance.cUSD.toFixed()
     )} \n`
   );
   //   console.log(`Alice's Celo balance is: ${balance.CELO.toFixed()} \n`);
 
   // creates EscrowWrapper instance
-  escrowContract = await kit.contracts.getEscrow();
+  escrowContract = await aliceKit.contracts.getEscrow();
 }
 
 // Alice generates inputs necessary to make escrow payment
@@ -94,10 +95,10 @@ async function createTemporaryKeys() {
 
 // Alice escrows the payment
 async function makeEscrowPayment(escrowAmount: number) {
-  escrowToken = await kit.contracts.getStableToken();
+  escrowToken = await aliceKit.contracts.getStableToken();
 
   // Convert amount into wei: https://web3js.readthedocs.io/en/v1.2.11/web3-utils.html?highlight=towei#towei
-  const contractDecimalEscrowAmount = kit.web3.utils.toWei(
+  const contractDecimalEscrowAmount = aliceKit.web3.utils.toWei(
     escrowAmount.toString()
   );
   //   console.log("contractDecimalEscrowAmount:", contractDecimalEscrowAmount);
@@ -119,10 +120,10 @@ async function makeEscrowPayment(escrowAmount: number) {
   );
   const transferReceipt = await escrowTransfer.sendAndWaitForReceipt();
   console.log(
-    `Escrow transfer was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${transferReceipt.transactionHash} \n`
+    `Alice's payment into escrow was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${transferReceipt.transactionHash} \n`
   );
 
-  const id = await escrowContract.getSentPaymentIds(alicePublicAddress);
+//   const id = await escrowContract.getSentPaymentIds(alicePublicAddress);
   //   console.log("id", id);
 }
 
@@ -135,51 +136,73 @@ async function revokeEscrowPayment() {
   const escrowRevocation = await escrowContract.revoke(paymentId);
   const revocationReceipt = await escrowRevocation.sendAndWaitForReceipt();
   console.log(
-    `Escrow revocation was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${revocationReceipt.transactionHash} \n`
+    `Alice's escrow payment revocation was successful! \n-paymentID = ${paymentId})\nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${revocationReceipt.transactionHash} \n`
   );
 }
 
 // Bob creates a Celo account and connects account to contractkit
 async function bobCreatesAccount() {
+
+  // creates accounts for Bob
   const bobMnemonic = await generateMnemonic();
   console.log(`Bob's mnemonic:  \n"${bobMnemonic}"\n`); // print for debugging
   const bobKeys = await generateKeys(bobMnemonic);
   bobPublicKey = bobKeys.publicKey;
   bobPublicAddress = publicKeyToAddress(bobPublicKey);
   bobPrivateKey = bobKeys.privateKey;
+
+  // creates ContractKit instance for Bob
+  bobKit = await newKit(networkURL);
+  if (typeof bobKit == "undefined") {
+    throw new Error("variable bobKit undefined");
+  }
+  bobKit.addAccount(bobPrivateKey);
+  bobKit.defaultAccount = bobPublicAddress;
 }
 
 // Bob withdraws escrow payment from Alice
 async function withdrawEscrowPayment() {
-  // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L228-L231
-  const msgHash = kit.connection.web3.utils.soliditySha3({
-    type: "address",
-    value: alicePublicAddress,
-  });
-
-  if (!process.env.SECRET) {
-    throw new Error("Environment variable: SECRET is missing");
+  // Temporary: Create new kit instance to sign with `secret`
+  // TODO Arthur: find out how to add multiple accounts to kit instance
+  // kit.addAccount(secret)
+  const secretKit = await newKit(networkURL);
+  if (typeof secretKit == "undefined") {
+    throw new Error("variable secretKit undefined");
   }
+  secretKit.addAccount(secret);
+  secretKit.defaultAccount = paymentId;
+
+  // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L228-L231
+  const msgHash = secretKit.connection.web3.utils.soliditySha3({
+    type: "address",
+    value: paymentId,
+  });
   // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L233
-  const { r, s, v }: any = kit.connection.web3.eth.accounts.sign(
+  const { r, s, v }: any = secretKit.connection.web3.eth.accounts.sign(
     msgHash!,
-    process.env.SECRET
+    secret
   );
 
-  // INVARIANT: BOB HAS AN ACCOUNT, THE PAYMENTID AND THE SECRET
-  if (!process.env.PAYMENTID) {
-    throw new Error("Environment variable: PAYMENTID is missing");
-  }
-  console.log("paymentId:", process.env.PAYMENTID);
+  // TEMPORARY ISSUE: Bob doesn't have CELO/cSTABLES to pay gas fees
+  // TODO Arthur: Find out how Bob can make withdraw() call without tokens
+  // TEMPORARY SOLUTION: Alice makes small transfer to Bob
+//   const stableToken = await aliceKit.contracts.getStableToken();
+//   await stableToken.approve(escrowContract.address, stableTokenEscrowAmount).sendAndWaitForReceipt()
+  
 
-  const escrowWithdrawal = await escrowContract.withdraw(
-    process.env.PAYMENTID,
+  // INVARIANT: BOB HAS AN ACCOUNT AND KNOW THE PAYMENTID+SECRET
+  console.log(`Bob has an account: \n-Public address = ${bobPublicAddress} \n-Private Key: ${bobPrivateKey}\n`);
+  console.log(`Bob knows: \n-paymentID = ${paymentId} \n-secret = ${secret}\n`);
+
+  const bobEscrowWrapper = await secretKit.contracts.getEscrow();
+  const escrowWithdrawal = await bobEscrowWrapper.withdraw(
+    paymentId,
     v,
     r,
     s
   );
   const withdrawalReceipt = await escrowWithdrawal.sendAndWaitForReceipt();
-  console.log("Escrow withdrawal was successful", withdrawalReceipt);
+  console.log(`Bob's withdrawal from escrow was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${withdrawalReceipt.transactionHash} \n`);
 }
 
 // helper function to run/disable certain components when testing
@@ -195,9 +218,11 @@ async function main() {
 
   await init();
   await createTemporaryKeys();
+//   await makeEscrowPayment(0.1);
+//   await revokeEscrowPayment();
   await makeEscrowPayment(0.2);
-  await revokeEscrowPayment();
-  //   await withdrawEscrowPayment();
+  await bobCreatesAccount()
+  await withdrawEscrowPayment();
 }
 
 main();
