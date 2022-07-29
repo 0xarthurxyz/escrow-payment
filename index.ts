@@ -42,14 +42,14 @@ async function init() {
   if (typeof(kit) == 'undefined') {
     throw new Error('variable kit undefined');
   }
-  if (!process.env.PRIVATE_KEY) {
-    throw new Error("Environment variable: PRIVATE_KEY is missing");
+  if (!process.env.ALICE_PRIVATE_KEY) {
+    throw new Error("Environment variable: ALICE_PRIVATE_KEY is missing");
   }
-  kit.addAccount(process.env.PRIVATE_KEY);
+  kit.addAccount(process.env.ALICE_PRIVATE_KEY);
 
   // sets up your account
   account = normalizeAddressWith0x(
-    privateKeyToAddress(process.env.PRIVATE_KEY)
+    privateKeyToAddress(process.env.ALICE_PRIVATE_KEY)
   );
   kit.defaultAccount = account
 
@@ -61,6 +61,9 @@ async function init() {
   const balance : any = await kit.celoTokens.balancesOf(account); // print your account balance on the relevant network (to check if connection is established as expected)
   console.log('Celo balance:', balance.CELO.toFixed());
   console.log('cUSD balance:', balance.cUSD.toFixed());
+
+  // creates EscrowWrapper instance
+  escrowContract = await kit.contracts.getEscrow();
    
 }
 
@@ -82,7 +85,7 @@ async function createTemporaryKeys() {
 
 // Alice escrows the payment
 async function makeEscrowPayment(escrowAmount: number) {
-  escrowContract = await kit.contracts.getEscrow();
+//   escrowContract = await kit.contracts.getEscrow();
   escrowToken = await kit.contracts.getStableToken(); 
 
   // Convert amount into wei: https://web3js.readthedocs.io/en/v1.2.11/web3-utils.html?highlight=towei#towei
@@ -113,11 +116,12 @@ async function makeEscrowPayment(escrowAmount: number) {
 // Alice revokes escrow payment
 async function revokeEscrowPayment() {
     // Wait for expirySeconds before revoking
-    // from: https://stackoverflow.com/a/47480429
-    // const delay = ms => new Promise(res => setTimeout(res, ms));
-    // await delay(5000); // 5 seconds
+    const delay = (ms: number) => new Promise(res => setTimeout(res, ms)); // from: https://stackoverflow.com/a/47480429
+    await delay(5000); // wait 5 seconds
 
-
+    const escrowRevocation = await escrowContract.revoke(paymentId);
+    const revocationReceipt = await escrowRevocation.sendAndWaitForReceipt();
+    console.log('Escrow revocation was successful', revocationReceipt);
 }
 
 // Bob creates a Celo account
@@ -141,7 +145,7 @@ async function withdrawEscrowPayment() {
     const { r, s, v }: any = kit.connection.web3.eth.accounts.sign(msgHash!, process.env.SECRET)
 
     // INVARIANT: BOB HAS AN ACCOUNT, THE PAYMENTID AND THE SECRET
-    escrowContract = await kit.contracts.getEscrow();
+    // escrowContract = await kit.contracts.getEscrow();
 
     if (!process.env.PAYMENTID) {
         throw new Error("Environment variable: PAYMENTID is missing");
@@ -167,8 +171,9 @@ async function main() {
 
   await init();
   await createTemporaryKeys();
-//   await makeEscrowPayment(0.2);
-  await withdrawEscrowPayment();
+  await makeEscrowPayment(0.2);
+  await revokeEscrowPayment();
+//   await withdrawEscrowPayment();
 
 }
 
