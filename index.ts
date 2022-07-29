@@ -184,28 +184,50 @@ async function gasStationFundsBobAccount() {
   gasKit.defaultAccount = gasPublicAddress;
 
   // Shows gas station is connected and has sufficient funds
-  const gasStationBalance: any = await gasKit.celoTokens.balancesOf(gasPublicAddress);
+  const gasStationBalance: any = await gasKit.celoTokens.balancesOf(
+    gasPublicAddress
+  );
   console.log(
     `Gas station: 
     \n-Public address = ${gasPublicAddress} 
     \n-Private Key: ${gasPrivateKey}
+    \n-Gas station's CELO balance is: ${gasKit.web3.utils.fromWei(
+      gasStationBalance.CELO.toFixed()
+    )}
     \n-Gas station's cUSD balance is: ${gasKit.web3.utils.fromWei(
-        gasStationBalance.cUSD.toFixed())
-    }\n`
+      gasStationBalance.cUSD.toFixed()
+    )}\n`
   );
 
   // Gas station makes small transfer to Bob
+  // get token contract
   const stableToken = await gasKit.contracts.getStableToken();
+  const goldToken = await gasKit.contracts.getGoldToken();
+  // approve
   await stableToken
     .approve(bobPublicAddress, gasKit.web3.utils.toWei("0.01"))
     .sendAndWaitForReceipt();
-  const gasFeeTransfer = await stableToken.transfer(
+  await goldToken
+    .approve(bobPublicAddress, gasKit.web3.utils.toWei("0.01"))
+    .sendAndWaitForReceipt();
+
+  // transfer CELO
+  const gasFeeTransferInCELO = await goldToken.transfer(
     bobPublicAddress,
     gasKit.web3.utils.toWei("0.01")
   );
-  const gasFeeTransferReceipt = await gasFeeTransfer.sendAndWaitForReceipt();
+  const gasFeeTransferInCELOReceipt =
+    await gasFeeTransferInCELO.sendAndWaitForReceipt();
+  // transfer cUSD
+  const gasFeeTransferInStabletoken = await stableToken.transfer(
+    bobPublicAddress,
+    gasKit.web3.utils.toWei("0.01")
+  );
+  const gasFeeTransferInStabletokenReceipt =
+    await gasFeeTransferInStabletoken.sendAndWaitForReceipt();
+
   console.log(
-    `Gas station successfully funded Bob's account! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${gasFeeTransferReceipt} \n`
+    `Gas station successfully funded Bob's account with CELO and cUSD!\n`
   );
 
   const bobBalance: any = await bobKit.celoTokens.balancesOf(bobPublicAddress);
@@ -213,9 +235,12 @@ async function gasStationFundsBobAccount() {
     `Bob has an account: 
     \n-Public address = ${bobPublicAddress} 
     \n-Private Key: ${bobPrivateKey}
+    \n-Bob's CELO balance is: ${bobKit.web3.utils.fromWei(
+      bobBalance.CELO.toFixed()
+    )}
     \n-Bob's cUSD balance is: ${bobKit.web3.utils.fromWei(
-        bobBalance.cUSD.toFixed())
-    }\n`
+      bobBalance.cUSD.toFixed()
+    )}\n`
   );
 }
 
@@ -238,28 +263,27 @@ async function withdrawEscrowPayment() {
     value: paymentId,
   });
   // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L233
-  const { r, s, v }: any = bobKit.connection.web3.eth.accounts.sign(
+  const { r, s, v }: any = secretKit.connection.web3.eth.accounts.sign(
     msgHash!,
     secret
   );
 
   // INVARIANT: BOB HAS AN ACCOUNT WITH NON-ZERO BALANCE AND KNOWS THE PAYMENTID+SECRET
-  const balance: any = await bobKit.celoTokens.balancesOf(bobPublicAddress);
-  console.log(
-    `Bob has an account: 
-    \n-Public address = ${bobPublicAddress} 
-    \n-Private Key: ${bobPrivateKey} 
-    \nBob's cUSD balance is: ${bobKit.web3.utils.fromWei(
-      balance.cUSD.toFixed()
-    )} \n`
-  );
   console.log(`Bob knows: \n-paymentID = ${paymentId} \n-secret = ${secret}\n`);
 
-  const bobEscrowWrapper = await secretKit.contracts.getEscrow();
+  const bobEscrowWrapper = await bobKit.contracts.getEscrow();
   const escrowWithdrawal = await bobEscrowWrapper.withdraw(paymentId, v, r, s);
   const withdrawalReceipt = await escrowWithdrawal.sendAndWaitForReceipt();
   console.log(
     `Bob's withdrawal from escrow was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${withdrawalReceipt.transactionHash} \n`
+  );
+
+  // Checks Bob's new balance
+  const balance: any = await bobKit.celoTokens.balancesOf(bobPublicAddress);
+  console.log(
+    `Bob's new cUSD balance is: ${bobKit.web3.utils.fromWei(
+      balance.cUSD.toFixed()
+    )}\n`
   );
 }
 
@@ -275,13 +299,13 @@ async function main() {
   */
 
   await init();
-  //   await createTemporaryKeys();
-  //   await makeEscrowPayment(0.1);
+  await createTemporaryKeys();
+  await makeEscrowPayment(0.1);
   //   await revokeEscrowPayment();
   //   await makeEscrowPayment(0.2);
   await bobCreatesAccount();
   await gasStationFundsBobAccount();
-  //   await withdrawEscrowPayment();
+  await withdrawEscrowPayment();
 }
 
 main();
