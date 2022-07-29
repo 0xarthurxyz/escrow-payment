@@ -260,7 +260,7 @@ async function withdrawEscrowPayment() {
   // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L228-L231
   const msgHash = secretKit.connection.web3.utils.soliditySha3({
     type: "address",
-    value: paymentId,
+    value: bobPublicAddress,
   });
   // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L233
   const { r, s, v }: any = secretKit.connection.web3.eth.accounts.sign(
