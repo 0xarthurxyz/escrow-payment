@@ -91,7 +91,7 @@ async function init() {
 }
 
 // Alice generates inputs necessary to make escrow payment
-async function createTemporaryKeys() {
+async function aliceCreatesTemporaryKeys() {
   const mnemonic = await generateMnemonic();
   console.log(
     `The mnemonic used to generate temporary keys for the escrow payment is:  \n"${mnemonic}"\n`
@@ -107,7 +107,7 @@ async function createTemporaryKeys() {
 }
 
 // Alice escrows the payment
-async function makeEscrowPayment(escrowAmount: number) {
+async function aliceMakesEscrowPayment(escrowAmount: number) {
   escrowToken = await aliceKit.contracts.getStableToken();
 
   // Convert amount into wei: https://web3js.readthedocs.io/en/v1.2.11/web3-utils.html?highlight=towei#towei
@@ -141,7 +141,7 @@ async function makeEscrowPayment(escrowAmount: number) {
 }
 
 // Alice revokes escrow payment
-async function revokeEscrowPayment() {
+async function aliceRevokeEscrowPayment() {
   // Wait for expirySeconds before revoking
   const delay = (ms: number) => new Promise((res) => setTimeout(res, ms)); // from: https://stackoverflow.com/a/47480429
   await delay(5000); // wait 5 seconds
@@ -245,7 +245,7 @@ async function gasStationFundsBobAccount() {
 }
 
 // Bob withdraws escrow payment from Alice
-async function withdrawEscrowPayment() {
+async function bobWithdrawsEscrowPayment() {
   // Temporary: Create new kit instance to sign with `secret`
   // TODO Arthur: find out how to add multiple accounts to kit instance
   // kit.addAccount(secret)
@@ -299,13 +299,13 @@ async function main() {
   */
 
   await init();
-  await createTemporaryKeys();
-  await makeEscrowPayment(0.1);
-  //   await revokeEscrowPayment();
-  //   await makeEscrowPayment(0.2);
+  await aliceCreatesTemporaryKeys();
+  await aliceMakesEscrowPayment(0.1);
+    // await aliceRevokeEscrowPayment();
+  //   await aliceMakesEscrowPayment(0.2);
   await bobCreatesAccount();
   await gasStationFundsBobAccount();
-  await withdrawEscrowPayment();
+  await bobWithdrawsEscrowPayment();
 }
 
 main();
