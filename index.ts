@@ -6,6 +6,7 @@ import {
 } from "@celo/utils/lib/address";
 import { SignatureUtils } from "@celo/utils/lib/signatureUtils";
 import { generateMnemonic, generateKeys } from "@celo/cryptographic-utils";
+import { OdisUtils } from "@celo/identity";
 import { createInterface } from "readline";
 require("dotenv").config(); // to use .env file
 
@@ -59,11 +60,12 @@ if (!process.env.PHONE_NUMBER) {
 let plainTextPhoneNumber: string = process.env.PHONE_NUMBER;
 let odisPepper: string;
 let minimumNumberOfAttestations: number;
+let odisUrl: string;
+let odisPublicKey: string;
 
 /* 
-START
+FUNCTION SHARED ACROSS FLOWS
 */
-
 async function init() {
   // sets network URL
   switch (network) {
@@ -334,7 +336,43 @@ async function bobWithdrawsEscrowPayment() {
 OPTION: ATTESTATION-BASED ESCROW FLOW
 */
 
-async function aliceCreatesKeysWithIdentifier() {}
+async function aliceCreatesKeysWithIdentifier() {
+  const authSigner = {
+    authenticationMethod: OdisUtils.Query.AuthenticationMethod.WALLET_KEY,
+    aliceKit,
+  };
+
+  switch (network) {
+    case "alfajores":
+      odisUrl =
+        "https://us-central1-celo-phone-number-privacy.cloudfunctions.net";
+      odisPublicKey =
+        "kPoRxWdEdZ/Nd3uQnp3FJFs54zuiS+ksqvOm9x8vY6KHPG8jrfqysvIRU0wtqYsBKA7SoAsICMBv8C/Fb2ZpDOqhSqvr/sZbZoHmQfvbqrzbtDIPvUIrHgRS0ydJCMsA";
+      break;
+    case "mainnet":
+      odisUrl = "https://us-central1-celo-pgpnp-mainnet.cloudfunctions.net";
+      odisPublicKey =
+        "FvreHfLmhBjwxHxsxeyrcOLtSonC9j7K3WrS4QapYsQH6LdaDTaNGmnlQMfFY04Bp/K4wAvqQwO9/bqPVCKf8Ze8OZo8Frmog4JY4xAiwrsqOXxug11+htjEe1pj4uMA";
+      break;
+    default:
+      console.log(
+        `Set the NETWORK environment variable to either 'alfajores' or 'mainnet'`
+      );
+  }
+
+  const serviceContext = {
+    odisUrl,
+    odisPublicKey,
+  };
+
+  const odisResponse =
+    await OdisUtils.PhoneNumberIdentifier.getPhoneNumberIdentifier(
+      plainTextPhoneNumber,
+      alicePublicAddress,
+      authSigner,
+      serviceContext
+    );
+}
 
 /* 
 HELPER FUNCTIONS
@@ -366,21 +404,21 @@ async function main() {
   */
 
   // Setting
-  let escrowOptionToVerifyProofOfIdentity = "secret-based"; // can be 'secret-based' or 'attestation-based'
+  let escrowOptionToVerifyProofOfIdentity = "attestation-based"; // can be 'secret-based' or 'attestation-based'
 
   // executes escrow flow chosen above
   switch (escrowOptionToVerifyProofOfIdentity) {
     case "secret-based":
       await init();
-      
+
       // escrow payment settings
       escrowAmount = 0.1;
       escrowTokenName = "cUSD"; // default: 'cUSD' (can be 'CELO' in this example)
       identifier =
-      "0x0000000000000000000000000000000000000000000000000000000000000000"; // default (cannot be changed in this escrow flow)
+        "0x0000000000000000000000000000000000000000000000000000000000000000"; // default (cannot be changed in this escrow flow)
       expirySecondsBeforeRevocation = 1;
       minimumNumberOfAttestations = 0; // default (cannot be changed in this escrow flow)
-      
+
       // test escrow payment
       await aliceCreatesRandomTemporaryKeys();
       await aliceMakesEscrowPayment(
@@ -416,6 +454,7 @@ async function main() {
 
     case "attestation-based":
       await init();
+      await aliceCreatesKeysWithIdentifier();
 
       break;
   }
