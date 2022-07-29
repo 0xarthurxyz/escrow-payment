@@ -7,6 +7,7 @@ import {
 import { SignatureUtils } from "@celo/utils/lib/signatureUtils";
 import { generateMnemonic, generateKeys } from "@celo/cryptographic-utils";
 import { OdisUtils } from "@celo/identity";
+import { WalletKeySigner } from "@celo/identity/lib/odis/query";
 import { createInterface } from "readline";
 require("dotenv").config(); // to use .env file
 
@@ -54,10 +55,12 @@ let gasPrivateKey: string = process.env.GAS_STATION_PRIVATE_KEY;
 
 // Variables for attestations
 let attestationsContract: any; // instance of the Attestations.sol contract wrapper
+let accountsContract: any; // instance of the Accounts.sol contract wrapper
 if (!process.env.PHONE_NUMBER) {
   throw new Error("Environment variable: PHONE_NUMBER is missing");
 }
 let plainTextPhoneNumber: string = process.env.PHONE_NUMBER;
+let phoneNumberHash: string;
 let odisPepper: string;
 let minimumNumberOfAttestations: number;
 let odisUrl: string;
@@ -167,6 +170,7 @@ async function aliceMakesEscrowPayment(
   */
 
   // makes escrow payment
+  // from: https://github.com/celo-org/celo-monorepo/blob/cfbb0bdcaf04d6132a432ab0c4b82b0ca4911a68/packages/celotool/src/cmds/account/invite.ts#L87
   const escrowTransfer = await escrowContract.transfer(
     identifier,
     escrowToken.address,
@@ -338,9 +342,34 @@ OPTION: ATTESTATION-BASED ESCROW FLOW
 
 // From: https://github.com/critesjosh/register-number/blob/1638bc817a1e8ad1f59edefff81364080a5ff3ef/index.js#L244-L283
 async function aliceCreatesKeysWithIdentifier() {
-  const authSigner : OdisUtils.Query.WalletKeySigner = {
+  // generate data encryption key (DEK)
+  const dekMnemonic = await generateMnemonic();
+  const dataEncryptionKeys = await generateKeys(dekMnemonic);
+  const dekPublicKey = dataEncryptionKeys.publicKey;
+  const dekPublicAddress = publicKeyToAddress(dekPublicKey);
+  const dataEncryptionKey = dataEncryptionKeys.privateKey;
+
+  // register data encryption key (DEK)
+  // from: https://github.com/celo-org/docs/blob/647dea55c7c0b3bb25106a4e8cebed22c54e97b7/docs/developer-resources/contractkit/data-encryption-key.md#L13
+  accountsContract = await aliceKit.contracts.getAccounts();
+
+  const setDEK = await accountsContract.setAccountDataEncryptionKey(
+    dekPublicAddress
+  );
+  const setDEKReceipt = await setDEK.sendAndWaitForReceipt();
+  const dataEncryptionKeyCheck = await accountsContract.getDataEncryptionKey(
+    dekPublicKey
+  );
+  console.log(
+    `Alice's data encryption key registration was successful!
+    - DEK = ${dataEncryptionKey}
+    See transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${setDEKReceipt} \n`
+  );
+
+  // set up environment for odis query
+  const authSigner: WalletKeySigner = {
     authenticationMethod: OdisUtils.Query.AuthenticationMethod.WALLET_KEY,
-    contractKit: aliceKit
+    contractKit: aliceKit,
   };
 
   switch (network) {
@@ -363,9 +392,10 @@ async function aliceCreatesKeysWithIdentifier() {
 
   const serviceContext = {
     odisUrl,
-    odisPublicKey,
+    odisPubKey: odisPublicKey,
   };
 
+  // query odis for phone number pepper
   const odisResponse =
     await OdisUtils.PhoneNumberIdentifier.getPhoneNumberIdentifier(
       plainTextPhoneNumber,
@@ -373,6 +403,12 @@ async function aliceCreatesKeysWithIdentifier() {
       authSigner,
       serviceContext
     );
+  odisPepper = odisResponse.pepper;
+  phoneNumberHash = odisResponse.phoneHash;
+
+  // check odis query was successful
+  console.log(`Pepper: ${odisPepper}`);
+  console.log(`Phone hash: ${phoneNumberHash}`);
 }
 
 /* 
