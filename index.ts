@@ -16,7 +16,7 @@ let networkURL: any; // Forno URL
 let alicePublicAddress: string;
 let alicePublicKey: string;
 if (!process.env.ALICE_PRIVATE_KEY) {
-    throw new Error("Environment variable: ALICE_PRIVATE_KEY is missing");
+  throw new Error("Environment variable: ALICE_PRIVATE_KEY is missing");
 }
 let alicePrivateKey: string = process.env.ALICE_PRIVATE_KEY;
 let aliceKit: ContractKit; // Alice's ContractKit instance
@@ -34,6 +34,19 @@ let paymentId: string;
 let secret: string;
 let escrowToken: any; // token to be sent from Alice to Bon (cUSD in this example, but any ERC20 token works)
 let escrowAmount: number; // amount of tokens to be sent from Alice to Bob
+
+// Variables for third party gas station
+let gasKit: ContractKit;
+if (!process.env.GAS_STATION_PUBLIC_ADDRESS) {
+  throw new Error(
+    "Environment variable: GAS_STATION_PUBLIC_ADDRESS is missing"
+  );
+}
+let gasPublicAddress: string = process.env.GAS_STATION_PUBLIC_ADDRESS;
+if (!process.env.GAS_STATION_PRIVATE_KEY) {
+  throw new Error("Environment variable: GAS_STATION_PRIVATE_KEY is missing");
+}
+let gasPrivateKey: string = process.env.GAS_STATION_PRIVATE_KEY;
 
 // sets up web3, contractkit, add private key to contractkit
 async function init() {
@@ -123,7 +136,7 @@ async function makeEscrowPayment(escrowAmount: number) {
     `Alice's payment into escrow was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${transferReceipt.transactionHash} \n`
   );
 
-//   const id = await escrowContract.getSentPaymentIds(alicePublicAddress);
+  //   const id = await escrowContract.getSentPaymentIds(alicePublicAddress);
   //   console.log("id", id);
 }
 
@@ -142,7 +155,6 @@ async function revokeEscrowPayment() {
 
 // Bob creates a Celo account and connects account to contractkit
 async function bobCreatesAccount() {
-
   // creates accounts for Bob
   const bobMnemonic = await generateMnemonic();
   console.log(`Bob's mnemonic:  \n"${bobMnemonic}"\n`); // print for debugging
@@ -160,6 +172,53 @@ async function bobCreatesAccount() {
   bobKit.defaultAccount = bobPublicAddress;
 }
 
+async function gasStationFundsBobAccount() {
+  // INVARIANT: Bob doesn't have CELO/cSTABLES to pay gas fees, so gas station funds his account
+
+  // connect gas station
+  gasKit = await newKit(networkURL);
+  if (typeof gasKit == "undefined") {
+    throw new Error("variable gasKit undefined");
+  }
+  gasKit.addAccount(gasPrivateKey);
+  gasKit.defaultAccount = gasPublicAddress;
+
+  // Shows gas station is connected and has sufficient funds
+  const gasStationBalance: any = await gasKit.celoTokens.balancesOf(gasPublicAddress);
+  console.log(
+    `Gas station: 
+    \n-Public address = ${gasPublicAddress} 
+    \n-Private Key: ${gasPrivateKey}
+    \n-Gas station's cUSD balance is: ${gasKit.web3.utils.fromWei(
+        gasStationBalance.cUSD.toFixed())
+    }\n`
+  );
+
+  // Gas station makes small transfer to Bob
+  const stableToken = await gasKit.contracts.getStableToken();
+  await stableToken
+    .approve(bobPublicAddress, gasKit.web3.utils.toWei("0.01"))
+    .sendAndWaitForReceipt();
+  const gasFeeTransfer = await stableToken.transfer(
+    bobPublicAddress,
+    gasKit.web3.utils.toWei("0.01")
+  );
+  const gasFeeTransferReceipt = await gasFeeTransfer.sendAndWaitForReceipt();
+  console.log(
+    `Gas station successfully funded Bob's account! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${gasFeeTransferReceipt} \n`
+  );
+
+  const bobBalance: any = await bobKit.celoTokens.balancesOf(bobPublicAddress);
+  console.log(
+    `Bob has an account: 
+    \n-Public address = ${bobPublicAddress} 
+    \n-Private Key: ${bobPrivateKey}
+    \n-Bob's cUSD balance is: ${bobKit.web3.utils.fromWei(
+        bobBalance.cUSD.toFixed())
+    }\n`
+  );
+}
+
 // Bob withdraws escrow payment from Alice
 async function withdrawEscrowPayment() {
   // Temporary: Create new kit instance to sign with `secret`
@@ -172,37 +231,36 @@ async function withdrawEscrowPayment() {
   secretKit.addAccount(secret);
   secretKit.defaultAccount = paymentId;
 
+  // Get { v, r, s } arguments for withdraw()
   // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L228-L231
   const msgHash = secretKit.connection.web3.utils.soliditySha3({
     type: "address",
     value: paymentId,
   });
   // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L233
-  const { r, s, v }: any = secretKit.connection.web3.eth.accounts.sign(
+  const { r, s, v }: any = bobKit.connection.web3.eth.accounts.sign(
     msgHash!,
     secret
   );
 
-  // TEMPORARY ISSUE: Bob doesn't have CELO/cSTABLES to pay gas fees
-  // TODO Arthur: Find out how Bob can make withdraw() call without tokens
-  // TEMPORARY SOLUTION: Alice makes small transfer to Bob
-//   const stableToken = await aliceKit.contracts.getStableToken();
-//   await stableToken.approve(escrowContract.address, stableTokenEscrowAmount).sendAndWaitForReceipt()
-  
-
-  // INVARIANT: BOB HAS AN ACCOUNT AND KNOW THE PAYMENTID+SECRET
-  console.log(`Bob has an account: \n-Public address = ${bobPublicAddress} \n-Private Key: ${bobPrivateKey}\n`);
+  // INVARIANT: BOB HAS AN ACCOUNT WITH NON-ZERO BALANCE AND KNOWS THE PAYMENTID+SECRET
+  const balance: any = await bobKit.celoTokens.balancesOf(bobPublicAddress);
+  console.log(
+    `Bob has an account: 
+    \n-Public address = ${bobPublicAddress} 
+    \n-Private Key: ${bobPrivateKey} 
+    \nBob's cUSD balance is: ${bobKit.web3.utils.fromWei(
+      balance.cUSD.toFixed()
+    )} \n`
+  );
   console.log(`Bob knows: \n-paymentID = ${paymentId} \n-secret = ${secret}\n`);
 
   const bobEscrowWrapper = await secretKit.contracts.getEscrow();
-  const escrowWithdrawal = await bobEscrowWrapper.withdraw(
-    paymentId,
-    v,
-    r,
-    s
-  );
+  const escrowWithdrawal = await bobEscrowWrapper.withdraw(paymentId, v, r, s);
   const withdrawalReceipt = await escrowWithdrawal.sendAndWaitForReceipt();
-  console.log(`Bob's withdrawal from escrow was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${withdrawalReceipt.transactionHash} \n`);
+  console.log(
+    `Bob's withdrawal from escrow was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${withdrawalReceipt.transactionHash} \n`
+  );
 }
 
 // helper function to run/disable certain components when testing
@@ -217,12 +275,13 @@ async function main() {
   */
 
   await init();
-  await createTemporaryKeys();
-//   await makeEscrowPayment(0.1);
-//   await revokeEscrowPayment();
-  await makeEscrowPayment(0.2);
-  await bobCreatesAccount()
-  await withdrawEscrowPayment();
+  //   await createTemporaryKeys();
+  //   await makeEscrowPayment(0.1);
+  //   await revokeEscrowPayment();
+  //   await makeEscrowPayment(0.2);
+  await bobCreatesAccount();
+  await gasStationFundsBobAccount();
+  //   await withdrawEscrowPayment();
 }
 
 main();
