@@ -1,21 +1,32 @@
-import { 
-    ContractKit, 
-    newKit 
-} from "@celo/contractkit";
+import { ContractKit, newKit } from "@celo/contractkit";
 import {
   publicKeyToAddress,
   normalizeAddressWith0x,
   privateKeyToAddress,
 } from "@celo/utils/lib/address";
-import { SignatureUtils } from "@celo/utils/lib/signatureUtils"
+import { SignatureUtils } from "@celo/utils/lib/signatureUtils";
 import { generateMnemonic, generateKeys } from "@celo/cryptographic-utils";
 require("dotenv").config(); // to use .env file
 
-// sets up main variables (for later use)
-let kit : ContractKit; // ContractKit instance
+// Variables for general use
+let kit: ContractKit; // ContractKit instance
 let network = "alfajores"; // "mainnet" or "alfajores" (from .env file)
 let networkURL: any; // Forno URL
-let account: any; // your account (public address and private key) for testing purposes
+
+// Variables for Alice (sender)
+let alicePublicAddress: string;
+let alicePublicKey: string;
+if (!process.env.ALICE_PRIVATE_KEY) {
+  throw new Error("Environment variable: ALICE_PRIVATE_KEY is missing");
+}
+let alicePrivateKey: string = process.env.ALICE_PRIVATE_KEY;
+
+// Variables for Bob (recipient)
+let bobPublicAddress: string;
+let bobPublicKey: string;
+let bobPrivateKey: string;
+
+// Variables for Escrow payment
 let escrowContract: any; // Instance of the Escrow.sol contract wrapper
 let identifier: string; // obfuscated representation of user's identity (e.g. phone number)
 let paymentId: string;
@@ -39,63 +50,63 @@ async function init() {
 
   // creates ContractKit instance
   kit = await newKit(networkURL);
-  if (typeof(kit) == 'undefined') {
-    throw new Error('variable kit undefined');
+  if (typeof kit == "undefined") {
+    throw new Error("variable kit undefined");
   }
-  if (!process.env.ALICE_PRIVATE_KEY) {
-    throw new Error("Environment variable: ALICE_PRIVATE_KEY is missing");
-  }
-  kit.addAccount(process.env.ALICE_PRIVATE_KEY);
+  kit.addAccount(alicePrivateKey);
 
   // sets up your account
-  account = normalizeAddressWith0x(
-    privateKeyToAddress(process.env.ALICE_PRIVATE_KEY)
+  alicePublicAddress = normalizeAddressWith0x(
+    privateKeyToAddress(alicePrivateKey)
   );
-  kit.defaultAccount = account
+  kit.defaultAccount = alicePublicAddress;
 
   // checks account is connected as expected
-  console.log("contractkit account:", kit.defaultAccount);
-  console.log("public address:", account);
-
-  // checks connection by querying CELO and cUSD balances
-  const balance : any = await kit.celoTokens.balancesOf(account); // print your account balance on the relevant network (to check if connection is established as expected)
-  console.log('Celo balance:', balance.CELO.toFixed());
-  console.log('cUSD balance:', balance.cUSD.toFixed());
+  console.log(`Alice's public address is: ${alicePublicAddress} \n`);
+  // prints Alice's account balance on the relevant network (to check if connection is established as expected)
+  const balance: any = await kit.celoTokens.balancesOf(alicePublicAddress);
+  console.log(
+    `Alice's cUSD balance is: ${kit.web3.utils.fromWei(
+      balance.cUSD.toFixed()
+    )} \n`
+  );
+  //   console.log(`Alice's Celo balance is: ${balance.CELO.toFixed()} \n`);
 
   // creates EscrowWrapper instance
   escrowContract = await kit.contracts.getEscrow();
-   
 }
-
-/* 
-Option 2: Private key-based proof of identity
-*/
 
 // Alice generates inputs necessary to make escrow payment
 async function createTemporaryKeys() {
   const mnemonic = await generateMnemonic();
-  console.log("mnemonic: ", mnemonic); // print for debugging
-
+  console.log(
+    `The mnemonic used to generate temporary keys for the escrow payment is:  \n"${mnemonic}"\n`
+  ); // print for debugging
   const temporaryKeys = await generateKeys(mnemonic);
-  console.log("generatedKeys", temporaryKeys); // print for debugging
   const publicKey = temporaryKeys.publicKey;
   paymentId = publicKeyToAddress(publicKey);
   secret = temporaryKeys.privateKey;
+
+  // Prints to help visualise
+  console.log(`Escrow paymentId is: ${paymentId}\n`);
+  console.log(`Escrow secret is: ${secret}\n`);
 }
 
 // Alice escrows the payment
 async function makeEscrowPayment(escrowAmount: number) {
-//   escrowContract = await kit.contracts.getEscrow();
-  escrowToken = await kit.contracts.getStableToken(); 
+  escrowToken = await kit.contracts.getStableToken();
 
   // Convert amount into wei: https://web3js.readthedocs.io/en/v1.2.11/web3-utils.html?highlight=towei#towei
-  const contractDecimalEscrowAmount = kit.web3.utils.toWei(escrowAmount.toString());
-  console.log('contractDecimalEscrowAmount:', contractDecimalEscrowAmount);
-  identifier = '0x0000000000000000000000000000000000000000000000000000000000000000'
-  console.log('escrowToken.address:', escrowToken.address);
-  console.log('paymentId:', paymentId);
+  const contractDecimalEscrowAmount = kit.web3.utils.toWei(
+    escrowAmount.toString()
+  );
+  //   console.log("contractDecimalEscrowAmount:", contractDecimalEscrowAmount);
+  identifier =
+    "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-  await escrowToken.approve(escrowContract.address, contractDecimalEscrowAmount).sendAndWaitForReceipt();
+  await escrowToken
+    .approve(escrowContract.address, contractDecimalEscrowAmount)
+    .sendAndWaitForReceipt();
 
   // INVARIANT: ALICE'S ACCOUNT HAS A cUSD BALANCE
   const escrowTransfer = await escrowContract.transfer(
@@ -107,56 +118,69 @@ async function makeEscrowPayment(escrowAmount: number) {
     0
   );
   const transferReceipt = await escrowTransfer.sendAndWaitForReceipt();
-  console.log('Escrow transfer was successful', transferReceipt);
+  console.log(
+    `Escrow transfer was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${transferReceipt.transactionHash} \n`
+  );
 
-  const id = await escrowContract.getSentPaymentIds(account);
-  console.log('id', id)
+  const id = await escrowContract.getSentPaymentIds(alicePublicAddress);
+  //   console.log("id", id);
 }
 
 // Alice revokes escrow payment
 async function revokeEscrowPayment() {
-    // Wait for expirySeconds before revoking
-    const delay = (ms: number) => new Promise(res => setTimeout(res, ms)); // from: https://stackoverflow.com/a/47480429
-    await delay(5000); // wait 5 seconds
+  // Wait for expirySeconds before revoking
+  const delay = (ms: number) => new Promise((res) => setTimeout(res, ms)); // from: https://stackoverflow.com/a/47480429
+  await delay(5000); // wait 5 seconds
 
-    const escrowRevocation = await escrowContract.revoke(paymentId);
-    const revocationReceipt = await escrowRevocation.sendAndWaitForReceipt();
-    console.log('Escrow revocation was successful', revocationReceipt);
+  const escrowRevocation = await escrowContract.revoke(paymentId);
+  const revocationReceipt = await escrowRevocation.sendAndWaitForReceipt();
+  console.log(
+    `Escrow revocation was successful! \nSee transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${revocationReceipt.transactionHash} \n`
+  );
 }
 
-// Bob creates a Celo account
+// Bob creates a Celo account and connects account to contractkit
+async function bobCreatesAccount() {
+  const bobMnemonic = await generateMnemonic();
+  console.log(`Bob's mnemonic:  \n"${bobMnemonic}"\n`); // print for debugging
+  const bobKeys = await generateKeys(bobMnemonic);
+  bobPublicKey = bobKeys.publicKey;
+  bobPublicAddress = publicKeyToAddress(bobPublicKey);
+  bobPrivateKey = bobKeys.privateKey;
+}
 
 // Bob withdraws escrow payment from Alice
 async function withdrawEscrowPayment() {
+  // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L228-L231
+  const msgHash = kit.connection.web3.utils.soliditySha3({
+    type: "address",
+    value: alicePublicAddress,
+  });
 
-    // ({ v, r, s } = await getVerificationCodeSignature(caller, issuer, phoneHash, accounts))
-    // const { v, r, s } = SignatureUtils.signMessage( );
+  if (!process.env.SECRET) {
+    throw new Error("Environment variable: SECRET is missing");
+  }
+  // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L233
+  const { r, s, v }: any = kit.connection.web3.eth.accounts.sign(
+    msgHash!,
+    process.env.SECRET
+  );
 
-    // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L228-L231
-    const msgHash = kit.connection.web3.utils.soliditySha3({
-        type: 'address',
-        value: account,
-    })
+  // INVARIANT: BOB HAS AN ACCOUNT, THE PAYMENTID AND THE SECRET
+  if (!process.env.PAYMENTID) {
+    throw new Error("Environment variable: PAYMENTID is missing");
+  }
+  console.log("paymentId:", process.env.PAYMENTID);
 
-    if (!process.env.SECRET) {
-        throw new Error("Environment variable: SECRET is missing");
-    }
-    // From Valora: https://github.com/valora-inc/wallet/blob/178a0ac8e0bce10e308a7e4f0a8367a254f5f84d/src/escrow/saga.ts#L233
-    const { r, s, v }: any = kit.connection.web3.eth.accounts.sign(msgHash!, process.env.SECRET)
-
-    // INVARIANT: BOB HAS AN ACCOUNT, THE PAYMENTID AND THE SECRET
-    // escrowContract = await kit.contracts.getEscrow();
-
-    if (!process.env.PAYMENTID) {
-        throw new Error("Environment variable: PAYMENTID is missing");
-    }
-    console.log('paymentId:', process.env.PAYMENTID);
-
-    const escrowWithdrawal = await escrowContract.withdraw(process.env.PAYMENTID, v, r, s);
-    const withdrawalReceipt = await escrowWithdrawal.sendAndWaitForReceipt();
-    console.log('Escrow withdrawal was successful', withdrawalReceipt);
+  const escrowWithdrawal = await escrowContract.withdraw(
+    process.env.PAYMENTID,
+    v,
+    r,
+    s
+  );
+  const withdrawalReceipt = await escrowWithdrawal.sendAndWaitForReceipt();
+  console.log("Escrow withdrawal was successful", withdrawalReceipt);
 }
-
 
 // helper function to run/disable certain components when testing
 async function main() {
@@ -173,8 +197,7 @@ async function main() {
   await createTemporaryKeys();
   await makeEscrowPayment(0.2);
   await revokeEscrowPayment();
-//   await withdrawEscrowPayment();
-
+  //   await withdrawEscrowPayment();
 }
 
 main();
