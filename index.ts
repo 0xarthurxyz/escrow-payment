@@ -372,13 +372,11 @@ async function aliceCreatesKeysWithIdentifier() {
   // from: https://github.com/celo-org/docs/blob/647dea55c7c0b3bb25106a4e8cebed22c54e97b7/docs/developer-resources/contractkit/data-encryption-key.md#L13
   accountsContract = await aliceKit.contracts.getAccounts();
 
-  const setDEK = await accountsContract.setAccountDataEncryptionKey(
-    dekPublicKey
-  );
-  const setDEKReceipt = await setDEK.sendAndWaitForReceipt();
-  const dek = await accountsContract.getDataEncryptionKey(
-    alicePublicAddress
-  );
+  const setDEK = await accountsContract
+    .setAccountDataEncryptionKey(dekPublicKey)
+    .sendAndWaitForReceipt();
+
+  const dek = await accountsContract.getDataEncryptionKey(alicePublicAddress);
   console.log(
     `Alice's data encryption key registration was successful!
     - DEK = ${dek}`
@@ -417,19 +415,21 @@ async function aliceCreatesKeysWithIdentifier() {
   //   odisPubKey: odisPublicKey,
   // };
 
-  console.log('OdisUtils.Query.getServiceContext(network)', OdisUtils.Query.getServiceContext(network))
+  console.log(
+    "OdisUtils.Query.getServiceContext(network)",
+    OdisUtils.Query.getServiceContext(network)
+  );
 
-  
   /* 
   DEBUGGING: `TypeError: Cannot read properties of undefined (reading 'SIGN_MESSAGE')`
   */
- console.log(`plainTextPhoneNumber = ${plainTextPhoneNumber}`);
- console.log(`alicePublicAddress = ${alicePublicAddress}`);
- console.log(`authSigner = ${authSigner.authenticationMethod}`);
-//  console.log(`serviceContext = ${serviceContext.odisUrl}`);
- 
- console.log("\nhere");
- /* 
+  console.log(`plainTextPhoneNumber = ${plainTextPhoneNumber}`);
+  console.log(`alicePublicAddress = ${alicePublicAddress}`);
+  console.log(`authSigner = ${authSigner.authenticationMethod}`);
+  //  console.log(`serviceContext = ${serviceContext.odisUrl}`);
+
+  console.log("\nhere");
+  /* 
  WORKS UP TO HERE
  */
   // query odis for phone number pepper
