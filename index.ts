@@ -412,10 +412,12 @@ async function aliceCreatesKeysWithIdentifier() {
       );
   }
 
-  const serviceContext = {
-    odisUrl,
-    odisPubKey: odisPublicKey,
-  };
+  // const serviceContext = {
+  //   odisUrl,
+  //   odisPubKey: odisPublicKey,
+  // };
+
+  console.log('OdisUtils.Query.getServiceContext(network)', OdisUtils.Query.getServiceContext(network))
 
   
   /* 
@@ -424,7 +426,7 @@ async function aliceCreatesKeysWithIdentifier() {
  console.log(`plainTextPhoneNumber = ${plainTextPhoneNumber}`);
  console.log(`alicePublicAddress = ${alicePublicAddress}`);
  console.log(`authSigner = ${authSigner.authenticationMethod}`);
- console.log(`serviceContext = ${serviceContext.odisUrl}`);
+//  console.log(`serviceContext = ${serviceContext.odisUrl}`);
  
  console.log("\nhere");
  /* 
@@ -436,7 +438,7 @@ async function aliceCreatesKeysWithIdentifier() {
       plainTextPhoneNumber,
       alicePublicAddress,
       authSigner,
-      serviceContext
+      OdisUtils.Query.getServiceContext(network)
     );
 
   console.log("here");
