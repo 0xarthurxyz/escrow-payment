@@ -298,7 +298,7 @@ async function anyoneQueriesIdentifier() {
   // dekKit.addAccount(dekPrivateKey);
 
   // register data encryption key (DEK) on-chain
-  // from: https://github.com/celo-org/docs/blob/647dea55c7c0b3bb25106a4e8cebed22c54e97b7/docs/developer-resources/contractkit/data-encryption-key.md#L13
+  // from: https://docs.celo.org/developer-resources/contractkit/data-encryption-key
   accountsContract = await aliceKit.contracts.getAccounts();
 
   const setDEK = await accountsContract
@@ -314,6 +314,7 @@ async function anyoneQueriesIdentifier() {
   console.log("here");
 
   // set up environment for odis query
+  // from: https://docs.celo.org/developer-guide/contractkit/odis
   const authSigner: EncryptionKeySigner = {
     authenticationMethod: OdisUtils.Query.AuthenticationMethod.ENCRYPTION_KEY,
     rawKey: dekPrivateKey,
