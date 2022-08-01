@@ -417,6 +417,15 @@ async function aliceCreatesKeysWithIdentifier() {
   WORKS UP TO HERE
   */
 
+  /* 
+  DEBUGGING: `TypeError: Cannot read properties of undefined (reading 'SIGN_MESSAGE')`
+  */
+  console.log(`plainTextPhoneNumber = ${plainTextPhoneNumber}`)
+  console.log(`alicePublicAddress = ${alicePublicAddress}`)
+  console.log(`authSigner = ${authSigner.authenticationMethod}`)
+  console.log(`serviceContext = ${serviceContext.odisUrl}`)
+
+
   // query odis for phone number pepper
   const odisResponse =
     await OdisUtils.PhoneNumberIdentifier.getPhoneNumberIdentifier(
@@ -425,7 +434,7 @@ async function aliceCreatesKeysWithIdentifier() {
       authSigner,
       serviceContext
     );
-    
+
   console.log("here");
 
   odisPepper = odisResponse.pepper;
