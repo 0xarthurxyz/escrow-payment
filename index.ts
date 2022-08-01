@@ -13,6 +13,7 @@ import {
   deriveDek,
   compressedPubKey,
 } from "@celo/cryptographic-utils";
+import { CombinerEndpoint } from "@celo/phone-number-privacy-common/lib/interfaces/endpoints";
 import { ensureCompressed } from "@celo/utils/lib/ecdh";
 import { OdisUtils } from "@celo/identity";
 import { EncryptionKeySigner } from "@celo/identity/lib/odis/query";
@@ -75,7 +76,7 @@ let odisUrl: string;
 let odisPublicKey: string;
 
 /* 
-FUNCTION SHARED ACROSS FLOWS
+FUNCTIONs SHARED ACROSS FLOWS
 */
 async function init() {
   // sets network URL
@@ -230,78 +231,6 @@ async function bobCreatesAccount() {
   bobKit.defaultAccount = bobPublicAddress;
 }
 
-async function gasStationFundsBobAccount() {
-  // INVARIANT: Bob doesn't have CELO/cSTABLES to pay gas fees, so gas station funds his account
-
-  // connect gas station
-  gasKit = await newKit(networkURL);
-  if (typeof gasKit == "undefined") {
-    throw new Error("variable gasKit undefined");
-  }
-  gasKit.addAccount(gasPrivateKey);
-  gasKit.defaultAccount = gasPublicAddress;
-
-  // Shows gas station is connected and has sufficient funds
-  const gasStationBalance: any = await gasKit.celoTokens.balancesOf(
-    gasPublicAddress
-  );
-  console.log(
-    `Gas station details: 
-    -Public address = ${gasPublicAddress} 
-    -Private Key: ${gasPrivateKey}
-    -Gas station's CELO balance is: ${gasKit.web3.utils.fromWei(
-      gasStationBalance.CELO.toFixed()
-    )}
-    -Gas station's cUSD balance is: ${gasKit.web3.utils.fromWei(
-      gasStationBalance.cUSD.toFixed()
-    )}\n`
-  );
-
-  // Gas station makes small transfer to Bob
-  // get token contract
-  const stableToken = await gasKit.contracts.getStableToken();
-  const goldToken = await gasKit.contracts.getGoldToken();
-  // approve
-  await stableToken
-    .approve(bobPublicAddress, gasKit.web3.utils.toWei("0.01"))
-    .sendAndWaitForReceipt();
-  await goldToken
-    .approve(bobPublicAddress, gasKit.web3.utils.toWei("0.01"))
-    .sendAndWaitForReceipt();
-
-  // transfer CELO
-  const gasFeeTransferInCELO = await goldToken.transfer(
-    bobPublicAddress,
-    gasKit.web3.utils.toWei("0.01")
-  );
-  const gasFeeTransferInCELOReceipt =
-    await gasFeeTransferInCELO.sendAndWaitForReceipt();
-  // transfer cUSD
-  const gasFeeTransferInStabletoken = await stableToken.transfer(
-    bobPublicAddress,
-    gasKit.web3.utils.toWei("0.01")
-  );
-  const gasFeeTransferInStabletokenReceipt =
-    await gasFeeTransferInStabletoken.sendAndWaitForReceipt();
-
-  console.log(
-    `Gas station successfully funded Bob's account with CELO and cUSD!\n`
-  );
-
-  const bobBalance: any = await bobKit.celoTokens.balancesOf(bobPublicAddress);
-  console.log(
-    `Bob's newly created account details: 
-    -Public address = ${bobPublicAddress} 
-    -Private Key: ${bobPrivateKey}
-    -Bob's CELO balance is: ${bobKit.web3.utils.fromWei(
-      bobBalance.CELO.toFixed()
-    )}
-    -Bob's cUSD balance is: ${bobKit.web3.utils.fromWei(
-      bobBalance.cUSD.toFixed()
-    )}\n`
-  );
-}
-
 // Bob withdraws escrow payment from Alice
 async function bobWithdrawsEscrowPayment() {
   // Temporary: Create new kit instance to sign with `secret`
@@ -349,7 +278,7 @@ OPTION: ATTESTATION-BASED ESCROW FLOW
 */
 
 // From: https://github.com/critesjosh/register-number/blob/1638bc817a1e8ad1f59edefff81364080a5ff3ef/index.js#L244-L283
-async function aliceCreatesKeysWithIdentifier() {
+async function anyoneQueriesIdentifier() {
   // generate data encryption key (DEK)
   const mnemonic = await generateMnemonic();
   const dataEncryptionKeys = await deriveDek(mnemonic);
@@ -429,6 +358,7 @@ async function aliceCreatesKeysWithIdentifier() {
   //  console.log(`serviceContext = ${serviceContext.odisUrl}`);
 
   console.log("\nhere");
+  console.log(`CombinerEndpoint`, CombinerEndpoint);
   /* 
  WORKS UP TO HERE
  */
@@ -454,6 +384,78 @@ async function aliceCreatesKeysWithIdentifier() {
 /* 
 HELPER FUNCTIONS
 */
+
+async function gasStationFundsBobAccount() {
+  // INVARIANT: Bob doesn't have CELO/cSTABLES to pay gas fees, so gas station funds his account
+
+  // connect gas station
+  gasKit = await newKit(networkURL);
+  if (typeof gasKit == "undefined") {
+    throw new Error("variable gasKit undefined");
+  }
+  gasKit.addAccount(gasPrivateKey);
+  gasKit.defaultAccount = gasPublicAddress;
+
+  // Shows gas station is connected and has sufficient funds
+  const gasStationBalance: any = await gasKit.celoTokens.balancesOf(
+    gasPublicAddress
+  );
+  console.log(
+    `Gas station details: 
+    -Public address = ${gasPublicAddress} 
+    -Private Key: ${gasPrivateKey}
+    -Gas station's CELO balance is: ${gasKit.web3.utils.fromWei(
+      gasStationBalance.CELO.toFixed()
+    )}
+    -Gas station's cUSD balance is: ${gasKit.web3.utils.fromWei(
+      gasStationBalance.cUSD.toFixed()
+    )}\n`
+  );
+
+  // Gas station makes small transfer to Bob
+  // get token contract
+  const stableToken = await gasKit.contracts.getStableToken();
+  const goldToken = await gasKit.contracts.getGoldToken();
+  // approve
+  await stableToken
+    .approve(bobPublicAddress, gasKit.web3.utils.toWei("0.01"))
+    .sendAndWaitForReceipt();
+  await goldToken
+    .approve(bobPublicAddress, gasKit.web3.utils.toWei("0.01"))
+    .sendAndWaitForReceipt();
+
+  // transfer CELO
+  const gasFeeTransferInCELO = await goldToken.transfer(
+    bobPublicAddress,
+    gasKit.web3.utils.toWei("0.01")
+  );
+  const gasFeeTransferInCELOReceipt =
+    await gasFeeTransferInCELO.sendAndWaitForReceipt();
+  // transfer cUSD
+  const gasFeeTransferInStabletoken = await stableToken.transfer(
+    bobPublicAddress,
+    gasKit.web3.utils.toWei("0.01")
+  );
+  const gasFeeTransferInStabletokenReceipt =
+    await gasFeeTransferInStabletoken.sendAndWaitForReceipt();
+
+  console.log(
+    `Gas station successfully funded Bob's account with CELO and cUSD!\n`
+  );
+
+  const bobBalance: any = await bobKit.celoTokens.balancesOf(bobPublicAddress);
+  console.log(
+    `Bob's newly created account details: 
+    -Public address = ${bobPublicAddress} 
+    -Private Key: ${bobPrivateKey}
+    -Bob's CELO balance is: ${bobKit.web3.utils.fromWei(
+      bobBalance.CELO.toFixed()
+    )}
+    -Bob's cUSD balance is: ${bobKit.web3.utils.fromWei(
+      bobBalance.cUSD.toFixed()
+    )}\n`
+  );
+}
 
 // CLI input helper function
 // source: https://github.com/critesjosh/register-number/blob/1638bc817a1e8ad1f59edefff81364080a5ff3ef/index.js#L22-L34
@@ -531,7 +533,16 @@ async function main() {
 
     case "attestation-based":
       await init();
-      await aliceCreatesKeysWithIdentifier();
+      await anyoneQueriesIdentifier(); // Alice
+      // await anyoneCreatesDeterministicTemporaryKeys();
+      // await aliceMakesEscrowPayment();
+
+      // await bobCreatesAccount();
+      // await gasStationFundsBobAccount();
+      // anyoneQueriesIdentifier();  // Bob
+      // await anyoneCreatesDeterministicTemporaryKeys();
+      // Bob receives min number of attestations (verifies phone number ownership)
+      // await bobWithdrawsEscrowPayment();
 
       break;
   }
@@ -539,3 +550,7 @@ async function main() {
 
 // main function called execution
 main();
+
+/* TODO:
+- [ ] refactor to use 1 single kit instance instead of aliceKit, bobKit, gasKit 
+*/
