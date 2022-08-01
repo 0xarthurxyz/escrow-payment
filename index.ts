@@ -3,6 +3,7 @@ import {
   publicKeyToAddress,
   normalizeAddressWith0x,
   privateKeyToAddress,
+  privateKeyToPublicKey,
   ensureLeading0x,
 } from "@celo/utils/lib/address";
 import { SignatureUtils } from "@celo/utils/lib/signatureUtils";
@@ -10,9 +11,11 @@ import {
   generateMnemonic,
   generateKeys,
   deriveDek,
+  compressedPubKey,
 } from "@celo/cryptographic-utils";
+import { ensureCompressed } from "@celo/utils/lib/ecdh";
 import { OdisUtils } from "@celo/identity";
-import { WalletKeySigner } from "@celo/identity/lib/odis/query";
+import { EncryptionKeySigner } from "@celo/identity/lib/odis/query";
 import { createInterface } from "readline";
 require("dotenv").config(); // to use .env file
 
@@ -350,41 +353,43 @@ async function aliceCreatesKeysWithIdentifier() {
   // generate data encryption key (DEK)
   const mnemonic = await generateMnemonic();
   const dataEncryptionKeys = await deriveDek(mnemonic);
-  const dekPublicKey = dataEncryptionKeys.publicKey;
-  const dekPublicAddress = dataEncryptionKeys.address;
   const dekPrivateKey = dataEncryptionKeys.privateKey;
+  const dekPublicKey = privateKeyToPublicKey(dataEncryptionKeys.privateKey);
+  const dekPublicAddress = privateKeyToAddress(dataEncryptionKeys.privateKey);
 
-  // // set up DEK
-  const dekKit = await newKit(networkURL);
-  if (typeof dekKit == "undefined") {
-    throw new Error("variable aliceKit undefined");
-  }
-  dekKit.addAccount(dekPrivateKey);
+  console.log(`dekPublicKey: ${dekPublicKey}`);
+  console.log(`dekPublicAddress: ${dekPublicAddress}`);
+  console.log(`dekPrivateKey: ${dekPrivateKey}`);
+
+  // set up DEK
+  // const dekKit = await newKit(networkURL);
+  // if (typeof dekKit == "undefined") {
+  //   throw new Error("variable aliceKit undefined");
+  // }
+  // dekKit.addAccount(dekPrivateKey);
 
   // register data encryption key (DEK) on-chain
   // from: https://github.com/celo-org/docs/blob/647dea55c7c0b3bb25106a4e8cebed22c54e97b7/docs/developer-resources/contractkit/data-encryption-key.md#L13
   accountsContract = await aliceKit.contracts.getAccounts();
 
-  const setDEK = await accountsContract
-    .setAccountDataEncryptionKey(ensureLeading0x(dekPublicKey))
-    .sendAndWaitForReceipt();
-
-  // const setDEKReceipt = await setDEK.sendAndWaitForReceipt();
-  // const dataEncryptionKey = await accountsContract.getDataEncryptionKey(
-  //   dekPublicKey
-  // );
-  // console.log(
-  //   `Alice's data encryption key registration was successful!
-  //   - DEK = ${dekPrivateKey}
-  //   See transaction at: https://alfajores-blockscout.celo-testnet.org/tx/${setDEKReceipt} \n`
-  // );
+  const setDEK = await accountsContract.setAccountDataEncryptionKey(
+    dekPublicKey
+  );
+  const setDEKReceipt = await setDEK.sendAndWaitForReceipt();
+  const dek = await accountsContract.getDataEncryptionKey(
+    alicePublicAddress
+  );
+  console.log(
+    `Alice's data encryption key registration was successful!
+    - DEK = ${dek}`
+  );
 
   console.log("here");
 
   // set up environment for odis query
-  const authSigner: WalletKeySigner = {
-    authenticationMethod: OdisUtils.Query.AuthenticationMethod.WALLET_KEY,
-    contractKit: aliceKit,
+  const authSigner: EncryptionKeySigner = {
+    authenticationMethod: OdisUtils.Query.AuthenticationMethod.ENCRYPTION_KEY,
+    rawKey: dekPrivateKey,
   };
 
   console.log("here");
@@ -412,20 +417,19 @@ async function aliceCreatesKeysWithIdentifier() {
     odisPubKey: odisPublicKey,
   };
 
-  console.log("here");
-  /* 
-  WORKS UP TO HERE
-  */
-
+  
   /* 
   DEBUGGING: `TypeError: Cannot read properties of undefined (reading 'SIGN_MESSAGE')`
   */
-  console.log(`plainTextPhoneNumber = ${plainTextPhoneNumber}`)
-  console.log(`alicePublicAddress = ${alicePublicAddress}`)
-  console.log(`authSigner = ${authSigner.authenticationMethod}`)
-  console.log(`serviceContext = ${serviceContext.odisUrl}`)
-
-
+ console.log(`plainTextPhoneNumber = ${plainTextPhoneNumber}`);
+ console.log(`alicePublicAddress = ${alicePublicAddress}`);
+ console.log(`authSigner = ${authSigner.authenticationMethod}`);
+ console.log(`serviceContext = ${serviceContext.odisUrl}`);
+ 
+ console.log("\nhere");
+ /* 
+ WORKS UP TO HERE
+ */
   // query odis for phone number pepper
   const odisResponse =
     await OdisUtils.PhoneNumberIdentifier.getPhoneNumberIdentifier(
